@@ -46,10 +46,10 @@ object ATMKeeperService {
       case command: Command =>
         val realSender: ActorRef = sender
         implicit val timeout: Timeout = Timeout(10.seconds)
-        val response: Future[Either[String, String]] = (remoteActorBBB ? command).mapTo[Either[String, String]]
+        val response: Future[Either[String, (String, String)]] = (remoteActorBBB ? command).mapTo[Either[String, (String, String)]]
         response map {
-          case Right(msg) =>
-            realSender ! Right(msg)
+          case Right(msgs) =>
+            realSender ! Right(msgs)
           case Left(errMsg) =>
             realSender ! Left(errMsg)
         }
@@ -58,15 +58,12 @@ object ATMKeeperService {
   }
 
   case class Bank() {
-
     val system: ActorSystem = remotingSystem("BankSystem", 24321)
     val localActorBank: ActorRef = system.actorOf(Props[BankService], "bank")
-    def sendCommandToBBB(cmd: String):  Future[Either[String, String]] = {
+    def sendCommandToBBB(cmd: String):  Future[Either[String, (String, String)]] = {
       implicit val timeout: Timeout = Timeout(10.seconds)
-      (localActorBank ? Command(cmd, generateHMAC(cmd))).mapTo[Either[String, String]]
+      (localActorBank ? Command(cmd, generateHMAC(cmd))).mapTo[Either[String, (String, String)]]
     }
-
-
   }
 
 }

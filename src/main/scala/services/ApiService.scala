@@ -29,13 +29,13 @@ object ApiService {
             parameter("command") { cmd =>
               println(cmd)
               complete {
-                val response: Future[Either[String, String]] = bank.sendCommandToBBB(cmd)
+                val response: Future[Either[String, (String, String)]] = bank.sendCommandToBBB(cmd)
                 response map {
-                  case Right(msg) =>
-                    println(msg)
+                  case Right(msgs) =>
+                    println(s"${msgs._1}\n${msgs._2}")
                     s"""{
                        |  "result": "success",
-                       |  "state": "$msg"
+                       |  "state": "$msgs"
                        |}""".stripMargin
                   case Left(errMsg) =>
                     s"""{
