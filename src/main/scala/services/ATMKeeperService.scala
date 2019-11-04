@@ -22,12 +22,12 @@ object ATMKeeperService {
           remote {
             enabled-transports = ["akka.remote.netty.tcp"]
             netty.tcp {
-              hostname = "192.168.0.161"
+              hostname = "localhost"
               port = $port
             }
           }
         }
-    """)
+    """) // "192.168.0.161"
 
   def remotingSystem(name: String, port: Int): ActorSystem = ActorSystem(name, remotingConfig(port))
 
