@@ -35,7 +35,7 @@ object ApiService {
                     println(s"${msgs._1}\n${msgs._2}")
                     s"""{
                        |  "result": "success",
-                       |  "state": "$msgs"
+                       |  "state": "${if (msgs._2 == "") msgs._1 else if (msgs._1 == "") msgs._2 else msgs}"
                        |}""".stripMargin
                   case Left(errMsg) =>
                     s"""{
