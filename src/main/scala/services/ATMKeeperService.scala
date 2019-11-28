@@ -41,6 +41,8 @@ object ATMKeeperService {
 
     var remoteActorBBB: ActorRef = null
     var remoteBBBPublicKey: PublicKey = null
+    var bankStop = false
+    var bankIsInService = false
 
     override def receive: Receive = {
 
@@ -58,24 +60,52 @@ object ATMKeeperService {
 
       case command: Command =>
         val realSender: ActorRef = sender
-        implicit val timeout: Timeout = Timeout(10.seconds)
-        val response: Future[Either[String, (String, String)]] =
-          if (UsbUtils().validateBBBUsbConnection()) {
-            if (command.cmd == "Загрузить ключи") {
-              (remoteActorBBB ? command.toString.getBytes).mapTo[Either[String, (String, String)]]
-            } else if (remoteBBBPublicKey != null) {
-              (remoteActorBBB ? RSA.encrypt(command.toString, remoteBBBPublicKey)).mapTo[Either[String, (String, String)]]
-            } else {
-              Future { Left("BANK - BEAGLE BONE: Ключи шифрования не переданы! Передайте ключи для защищенного общения") }
-            }
+        implicit val timeout: Timeout = Timeout(1000.seconds)
+        val response: Future[Either[Array[Byte], (Array[Byte], Option[Array[Byte]])]] =
+           if (UsbUtils().validateBBBUsbConnection()) {
+             if (command.cmd == "Выключить банкомат") {
+                bankStop = true
+                Future { Right("БАНКОМАТ: выключен".getBytes(), None) }
+              } else if (command.cmd == "Перезагрузить банкомат") {
+                bankIsInService = false
+                bankStop = false
+                Future { Right("БАНКОМАТ: перезагружен".getBytes(), None) }
+              } else if (command.cmd == "Включить банкомат") {
+                bankIsInService = false
+                bankStop = false
+                Future { Right("БАНКОМАТ: включен".getBytes(), None) }
+              } else if (bankStop) {
+                Future { Right("БАНКОМАТ: выключен".getBytes(), None) }
+             } else if (bankIsInService) {
+                Future { Right("БАНКОМАТ: сервисное обслуживание (перезагрузите банкомат по окончанию обслуживания)".getBytes(), None) }
+             } else if (command.cmd == "Загрузить ключи" || command.cmd == "Обновить ключи") {
+                (remoteActorBBB ? command.toString.getBytes).mapTo[Either[Array[Byte], (Array[Byte], Option[Array[Byte]])]]
+              } else if (command.cmd == "Сервисное обслуживание банкомата") {
+                bankIsInService = true
+                Future { Right("БАНКОМАТ: сервисное обслуживание".getBytes(), None) }
+              } else if (remoteBBBPublicKey != null) {
+                (remoteActorBBB ? RSA.encrypt(command.toString, remoteBBBPublicKey)).mapTo[Either[Array[Byte], (Array[Byte], Option[Array[Byte]])]]
+              } else {
+                Future { Left("БАНКОМАТ - BEAGLE BONE: Ключи шифрования не переданы! Передайте ключи для защищенной передачи команд".getBytes()) }
+              }
           } else {
-            Future { Left("BEAGLE BONE: beagle bone не подключена к системе") }
+            Future { Left("BEAGLE BONE: beagle bone не подключена к системе".getBytes()) }
           }
         response map {
+          case Right(msgs) if new String(msgs._1) == "БАНКОМАТ - BEAGLE BONE: Ключи сброшены" =>
+            remoteBBBPublicKey = null
+            RSA.resetKeys
+            realSender ! Right((new String(msgs._1), ""))
+          case Right(msgs) if new String(msgs._1) == "БАНКОМАТ: сервисное обслуживание (перезагрузите банкомат по окончанию обслуживания)" ||
+                              new String(msgs._1) == "БАНКОМАТ: выключен" ||
+                              new String(msgs._1) == "БАНКОМАТ: перезагружен" ||
+                              new String(msgs._1) == "БАНКОМАТ: включен" ||
+                              new String(msgs._1) == "БАНКОМАТ: сервисное обслуживание" =>
+            realSender ! Right((new String(msgs._1), ""))
           case Right(msgs) =>
-            realSender ! Right(msgs)
+            realSender ! Right((RSA.decrypt(msgs._1), if (msgs._2.isDefined) RSA.decrypt(msgs._2.get) else ""))
           case Left(errMsg) =>
-            realSender ! Left(errMsg)
+            realSender ! Left(new String(errMsg))
         }
     }
 

@@ -6,7 +6,7 @@ import javax.crypto.Cipher
 object RSA {
   val cipher: Cipher = Cipher.getInstance("RSA")
 
-  def getSelfPublicKey: PublicKey = selfPublicKey
+  def getSelfPublicKey: PublicKey = if (selfPublicKey != null) selfPublicKey else { updateKeys; selfPublicKey }
 
   def decrypt(input: Array[Byte]): String = {
     cipher.init(Cipher.DECRYPT_MODE, privateKey)
@@ -18,7 +18,18 @@ object RSA {
     cipher.doFinal(input.getBytes)
   }
 
-  private val (selfPublicKey, privateKey) = getKeys
+  private var (selfPublicKey, privateKey) = getKeys
+
+  def updateKeys: Unit = {
+    val keys = getKeys
+    this.selfPublicKey = keys._1
+    this.privateKey = keys._2
+  }
+
+  def resetKeys: Unit = {
+    this.selfPublicKey = null
+    this.privateKey = null
+  }
 
   // Generate self RSA keys
   private def getKeys: (PublicKey, PrivateKey) = {
